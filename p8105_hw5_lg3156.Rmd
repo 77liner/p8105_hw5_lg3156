@@ -7,6 +7,7 @@ output: github_document
 
 ```{r setup}
 library(tidyverse)
+library(rvest)
 
 knitr::opts_chunk$set(
   fig.height = 8,
@@ -93,3 +94,53 @@ results_df %>%
 
 ```
 
+## Problem 2
+
+Clean the data
+
+```{r}
+tidy_df = 
+  tibble(
+    files = list.files(path = "data/data2", full.names = TRUE) 
+         ) %>% 
+  mutate(
+    data = purrr::map(.x = files, read_csv)
+  ) %>% 
+  unnest(data) %>% 
+  mutate(arm_id = str_extract_all(files, "(exp_\\d+|con_\\d+)")) %>% 
+  select(-files) %>% 
+  relocate(arm_id) %>% 
+  pivot_longer(
+    week_1:week_8,
+    names_to = "week",
+    names_prefix = "week_",
+    values_to = "observations"
+  ) %>% 
+  mutate_at(vars(week), as.numeric) %>% 
+  unnest(arm_id) 
+
+tidy_df %>% knitr::kable()
+```
+
+Make a spaghetti plot
+
+```{r}
+tidy_df %>%
+  mutate(group = case_when(
+    str_detect(arm_id,"con") ~ "Control",
+    str_detect(arm_id,"exp") ~ "Experimental"
+  )) %>% 
+  ggplot(aes(x = week,
+             y = observations)) +
+  geom_path(aes(color = group,
+                group = group),
+            alpha = 0.5) +
+  labs(
+    x = "Number of week",
+    y = "Observation value",
+    title = "Observations on each subject over time"
+    )
+
+```
+
+According to the plot, the observation value of experimental group is relatively stable over the 8 weeks; the observation value of control group kept increasing over the 8 weeks. The value of control group is higher than the value of experimental group.
