@@ -8,6 +8,7 @@ output: github_document
 ```{r setup}
 library(tidyverse)
 library(rvest)
+set.seed(1)
 
 knitr::opts_chunk$set(
   fig.height = 8,
@@ -144,3 +145,130 @@ tidy_df %>%
 ```
 
 According to the plot, the observation value of experimental group is relatively stable over the 8 weeks; the observation value of control group kept increasing over the 8 weeks. The value of control group is higher than the value of experimental group.
+
+## Problem 3
+
+T-test, when mu = 0
+
+```{r}
+sim_t = function(n = 30, mu = 0, sigma = 5) {
+     x = rnorm(n, mean = mu, sd = sigma)
+     t_test = t.test(x, conf.int = 0.95) %>% broom::tidy()
+     
+     t_test
+  }
+
+output = vector("list", 5000)
+for (i in 1:5000) {
+  output[[i]] = sim_t()
+}
+
+output %>% bind_rows() %>% head()
+
+```
+
+A plot showing the power of the test for different true mu
+```{r}
+sim_mu = function(set){
+  output = vector("list", 5000)
+  for (i in 1:5000) {
+     output[[i]] = sim_t(mu = set)
+     }
+  power = 
+    output %>% 
+    bind_rows() %>% 
+    janitor::clean_names() %>% 
+    select(estimate, p_value) %>% 
+    filter(p_value < 0.05) %>% 
+    count()
+  
+  power
+}
+
+power_of_test =
+  tibble(
+    sample_mu = c(1, 2, 3, 4, 5, 6),
+    reject_time = map(sample_mu, sim_mu)
+  ) %>%  
+  unnest(reject_time) %>% 
+  mutate(t_power = n/5000)
+
+power_of_test %>% 
+ggplot(aes(x = sample_mu, y = t_power)) +
+  geom_point(aes(color = sample_mu), alpha = .5, size = 3) +
+  geom_smooth(alpha = .5, size = 0.5) +
+  labs(
+    x = "The true value of μ",
+    y = "The power of the test",
+    title = "The power of the test for different true mu"
+    )
+
+```
+
+According to this plot, as the effect size increases, the power increases. When the true mu equals to 5, the power reaches 1.
+
+
+
+```{r}
+sim_mu_hat = function(n = 30, mu = 0, sigma = 5) {
+     sim_data = tibble(
+                           x = rnorm(n, mean = mu, sd = sigma),
+                    )
+     
+     sim_t_test = t.test(pull(sim_data,x), conf.int = 0.95) %>% 
+              broom::tidy() %>% 
+              janitor::clean_names() %>% 
+              select( p_value)
+     
+     
+     sim_data %>% 
+     summarize(
+      mu_hat_all = mean(x),
+      mu_hat_rej = case_when(
+        pull(sim_t_test, p_value) < 0.05 ~ mean(x),
+        pull(sim_t_test, p_value) >= 0.05 ~ as.numeric("")
+      )
+    )
+  }
+
+
+compare_all_reject = function(set){
+  output_mu_hat = vector("list", 5000)
+  for (i in 1:5000) {
+     output_mu_hat[[i]] = sim_mu_hat(mu = set)
+     }
+  
+  output_mu_hat %>% 
+    bind_rows() %>% 
+    summarize(
+      all_sample = mean(mu_hat_all, na.rm = T),
+      reject_sample = mean(mu_hat_rej, na.rm = T)
+    )
+  }
+
+mean_muhat =
+  tibble(
+    true_mu = c(1, 2, 3, 4, 5, 6),
+    hat = map(true_mu, compare_all_reject)
+  ) %>%  
+  unnest(hat) %>% 
+  pivot_longer(
+    all_sample:reject_sample,
+    names_to = "samples",
+    values_to = "average_estimate"
+  )
+
+mean_muhat %>% 
+ggplot(aes(x = true_mu, y = average_estimate, group = samples)) +
+  geom_point(aes(color = samples), alpha = .5, size = 2) +
+  geom_smooth(aes(color = samples), alpha = .5, size = 0.5) +
+  labs(
+    x = "The true value of μ",
+    y = "The average estimate of μ^",
+    title = "Compare the average estimate of μ^ of all sample and reject-null-sample"
+    )
+
+
+```
+
+According to this plot, for all true μ, average estimate of μ^ is equal to the true value of μ. When μ equals to 3, 4, 5, or 6, the sample average of μ^ across tests for which the null is rejected approximately is equal to the true value of μ. Because when μ is close to 0, the number of samples for which the null was rejected decreases and the μ^ of these samples would be far away from 0, which is also far away from μ. Similarly, when μ is away from 0, as for μ=5 and μ=6, for all samples, the null was rejected. Thus, the sample average of μ^(rejected) is equal to the sample average of μ^(all), which equals to true μ.
