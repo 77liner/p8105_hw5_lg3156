@@ -97,7 +97,7 @@ results_df %>%
 
 ## Problem 2
 
-Clean the data
+### Clean the data
 
 ```{r}
 tidy_df = 
@@ -118,24 +118,19 @@ tidy_df =
     values_to = "observations"
   ) %>% 
   mutate_at(vars(week), as.numeric) %>% 
-  unnest(arm_id) 
+  unnest(arm_id) %>% 
+  separate(arm_id, into = c("arm", "subject_id")) 
 
 tidy_df %>% knitr::kable()
 ```
 
-Make a spaghetti plot
+### Make a spaghetti plot
 
 ```{r}
 tidy_df %>%
-  mutate(group = case_when(
-    str_detect(arm_id,"con") ~ "Control",
-    str_detect(arm_id,"exp") ~ "Experimental"
-  )) %>% 
-  ggplot(aes(x = week,
-             y = observations)) +
-  geom_path(aes(color = group,
-                group = group),
-            alpha = 0.5) +
+  unite("arm_id", c(arm, subject_id), sep = "_", remove = F) %>%
+  ggplot(aes(x = week, y = observations)) +
+  geom_path(aes(color = arm, group = as.factor(arm_id)),alpha = 0.5) +
   labs(
     x = "Number of week",
     y = "Observation value",
@@ -148,7 +143,7 @@ According to the plot, the observation value of experimental group is relatively
 
 ## Problem 3
 
-T-test, when mu = 0
+### T-test, when mu = 0
 
 ```{r}
 sim_t = function(n = 30, mu = 0, sigma = 5) {
@@ -167,7 +162,7 @@ output %>% bind_rows() %>% head()
 
 ```
 
-A plot showing the power of the test for different true mu
+### A plot showing the power of the test for different true mu
 ```{r}
 sim_mu = function(set){
   output = vector("list", 5000)
@@ -187,7 +182,7 @@ sim_mu = function(set){
 
 power_of_test =
   tibble(
-    sample_mu = c(1, 2, 3, 4, 5, 6),
+    sample_mu = c(0, 1, 2, 3, 4, 5, 6),
     reject_time = map(sample_mu, sim_mu)
   ) %>%  
   unnest(reject_time) %>% 
@@ -207,7 +202,7 @@ ggplot(aes(x = sample_mu, y = t_power)) +
 
 According to this plot, as the effect size increases, the power increases. When the true mu equals to 5, the power reaches 1.
 
-
+### Compare the average estimate of μ^ of all sample and reject-null-sample
 
 ```{r}
 sim_mu_hat = function(n = 30, mu = 0, sigma = 5) {
@@ -248,7 +243,7 @@ compare_all_reject = function(set){
 
 mean_muhat =
   tibble(
-    true_mu = c(1, 2, 3, 4, 5, 6),
+    true_mu = c(0, 1, 2, 3, 4, 5, 6),
     hat = map(true_mu, compare_all_reject)
   ) %>%  
   unnest(hat) %>% 
